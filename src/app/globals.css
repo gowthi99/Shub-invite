@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-playfair), serif;
+  --color-brand: #b4235a;
+  --color-brand-dark: #8a1744;
+  --color-gold: #c9a227;
+  --color-cream: #fff8ef;
+}
+
+html, body { min-height: 100%; }
+body {
+  background: #fff8ef;
+  color: #2b1d22;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}
+
+/* Letter-spacing and case transforms break Telugu/Devanagari conjunct shaping. */
+[lang="te"], [lang="te"] *, [lang="hi"], [lang="hi"] * {
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
