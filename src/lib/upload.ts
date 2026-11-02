@@ -33,8 +33,23 @@ function sniff(buf: Buffer): string | null {
 }
 
 /**
- * Stores an uploaded image and returns its public URL.
- * - With BLOB_READ_WRITE_TOKEN: Vercel Blob (public, random suffix).
+ * The Blob read-write token. Vercel names it BLOB_READ_WRITE_TOKEN by default, but a store
+ * connected with a custom prefix gets e.g. INVITE_PHOTOS_READ_WRITE_TOKEN.
+ */
+export function blobToken(): string | undefined {
+  if (process.env.BLOB_READ_WRITE_TOKEN) return process.env.BLOB_READ_WRITE_TOKEN;
+  const key = Object.keys(process.env).find((k) => k.endsWith("READ_WRITE_TOKEN") && process.env[k]?.startsWith("vercel_blob_rw_"));
+  return key ? process.env[key] : undefined;
+}
+
+/** Private blobs are served through this app; only paths we created are allowed. */
+export const PHOTO_PREFIX = "invites/";
+export const privatePhotoUrl = (pathname: string) => `/api/photo/${pathname}`;
+
+/**
+ * Stores an uploaded image and returns a URL the invitation can display.
+ * - With a Blob token: Vercel Blob. Public stores return the CDN URL; private stores
+ *   (which reject public writes) return /api/photo/<pathname>, streamed by our route.
  * - Without (local dev): public/uploads/<random>.<ext>, served at /uploads/<file>.
  */
 export async function saveUpload(file: File): Promise<string> {
@@ -50,19 +65,26 @@ export async function saveUpload(file: File): Promise<string> {
   const ext = EXT[actual];
   const name = `${randomBytes(12).toString("hex")}.${ext}`;
 
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
+  const token = blobToken();
+  if (token) {
     const { put } = await import("@vercel/blob");
-    const blob = await put(`invites/${name}`, buf, {
-      access: "public",
-      addRandomSuffix: true,
-      contentType: actual,
-    });
-    return blob.url;
+    const opts = { token, addRandomSuffix: true, contentType: actual };
+    try {
+      const blob = await put(`${PHOTO_PREFIX}${name}`, buf, { ...opts, access: "public" });
+      return blob.url;
+    } catch (publicErr) {
+      try {
+        const blob = await put(`${PHOTO_PREFIX}${name}`, buf, { ...opts, access: "private" });
+        return privatePhotoUrl(blob.pathname);
+      } catch {
+        throw publicErr;
+      }
+    }
   }
 
   if (process.env.VERCEL) {
     // The deployed filesystem is read-only; a Blob store is required in production.
-    throw new UploadError("Uploads are not configured (add a Vercel Blob store)", 503);
+    throw new UploadError("Uploads are not configured: connect a Vercel Blob store to this project, then redeploy", 503);
   }
 
   const dir = path.join(process.cwd(), "public", "uploads");
